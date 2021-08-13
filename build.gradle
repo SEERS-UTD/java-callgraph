@@ -25,7 +25,6 @@ dependencies {
 group = 'gr.gousiosg'
 version = '0.1-SNAPSHOT'
 description = 'javacg'
-sourceCompatibility = '1.8'
 
 publishing {
     publications {

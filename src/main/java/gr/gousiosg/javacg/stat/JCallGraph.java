@@ -28,15 +28,16 @@
 
 package gr.gousiosg.javacg.stat;
 
-import java.io.*;
-import java.util.*;
-import java.util.function.Function;
-import java.util.jar.JarEntry;
-import java.util.jar.JarFile;
-import java.util.stream.Stream;
-import java.util.stream.StreamSupport;
-
 import org.apache.bcel.classfile.ClassParser;
+
+import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.List;
+import java.util.jar.JarFile;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Constructs a callgraph out of a JAR archive. Can combine multiple archives
@@ -47,64 +48,54 @@ import org.apache.bcel.classfile.ClassParser;
 public class JCallGraph {
 
     public static void main(String[] args) {
-
-        Function<ClassParser, ClassVisitor> getClassVisitor =
-                (ClassParser cp) -> {
-                    try {
-                        return new ClassVisitor(cp.parse());
-                    } catch (IOException e) {
-                        throw new UncheckedIOException(e);
-                    }
-                };
-
-        try {
-            for (String arg : args) {
-
-                File f = new File(arg);
-
-                if (!f.exists()) {
-                    System.err.println("Jar file " + arg + " does not exist");
-                }
-
-                try (JarFile jar = new JarFile(f)) {
-                    Stream<JarEntry> entries = enumerationAsStream(jar.entries());
-
-                    String methodCalls = entries.
-                            flatMap(e -> {
-                                if (e.isDirectory() || !e.getName().endsWith(".class"))
-                                    return (new ArrayList<String>()).stream();
-
-                                ClassParser cp = new ClassParser(arg, e.getName());
-                                return getClassVisitor.apply(cp).start().methodCalls().stream();
-                            }).
-                            map(s -> s + "\n").
-                            reduce(new StringBuilder(),
-                                    StringBuilder::append,
-                                    StringBuilder::append).toString();
-
-                    BufferedWriter log = new BufferedWriter(new OutputStreamWriter(System.out));
-                    log.write(methodCalls);
-                    log.close();
-                }
-            }
+        try (var writer = new PrintWriter(new BufferedWriter(new OutputStreamWriter(System.out)))) {
+            new JCallGraph().constructCallGraph(
+                    Arrays.stream(args).map(Path::of).collect(Collectors.toList())
+            )
+                    .forEachOrdered(writer::println);
         } catch (IOException e) {
             System.err.println("Error while processing jar: " + e.getMessage());
             e.printStackTrace();
         }
     }
 
-    public static <T> Stream<T> enumerationAsStream(Enumeration<T> e) {
-        return StreamSupport.stream(
-                Spliterators.spliteratorUnknownSize(
-                        new Iterator<T>() {
-                            public T next() {
-                                return e.nextElement();
-                            }
+    public Stream<String> constructCallGraph(List<Path> paths) throws IOException {
+        return paths.stream()
+                .flatMap(this::processJar);
+    }
 
-                            public boolean hasNext() {
-                                return e.hasMoreElements();
-                            }
-                        },
-                        Spliterator.ORDERED), false);
+    private Stream<String> processJar(Path jarPath) {
+        if (!Files.exists(jarPath)) {
+            System.err.println("Jar file " + jarPath + " does not exist");
+        }
+
+        JarFile jar;
+        try {
+            jar = new JarFile(jarPath.toFile());
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+
+        return jar.stream()
+                .filter(e -> !e.isDirectory() && e.getName().endsWith(".class"))
+                .flatMap(e -> {
+                    ClassParser cp = new ClassParser(jarPath.toString(), e.getName());
+                    return makeClassVisitor(cp).start().methodCalls().stream();
+                })
+                .onClose(() -> {
+                    try {
+                        jar.close();
+                    } catch (IOException e) {
+                        throw new UncheckedIOException(e);
+                    }
+                });
+    }
+
+    private ClassVisitor makeClassVisitor(ClassParser classParser) {
+        try {
+            return new ClassVisitor(classParser.parse());
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 }
