@@ -28,11 +28,7 @@
 
 package gr.gousiosg.javacg.stat;
 
-import org.apache.bcel.classfile.Constant;
-import org.apache.bcel.classfile.ConstantPool;
-import org.apache.bcel.classfile.EmptyVisitor;
-import org.apache.bcel.classfile.JavaClass;
-import org.apache.bcel.classfile.Method;
+import org.apache.bcel.classfile.*;
 import org.apache.bcel.generic.ConstantPoolGen;
 import org.apache.bcel.generic.MethodGen;
 
@@ -50,6 +46,7 @@ public class ClassVisitor extends EmptyVisitor {
     private String classReferenceFormat;
     private final DynamicCallManager DCManager = new DynamicCallManager();
     private List<String> methodCalls = new ArrayList<>();
+    private final List<String> classCalls = new ArrayList<>();
 
     public ClassVisitor(JavaClass jc) {
         clazz = jc;
@@ -65,7 +62,6 @@ public class ClassVisitor extends EmptyVisitor {
             DCManager.retrieveCalls(method, jc);
             DCManager.linkCalls(method);
             method.accept(this);
-
         }
     }
 
@@ -75,9 +71,9 @@ public class ClassVisitor extends EmptyVisitor {
             if (constant == null)
                 continue;
             if (constant.getTag() == 7) {
-                String referencedClass = 
-                    constantPool.constantToString(constant);
-                System.out.println(String.format(classReferenceFormat, referencedClass));
+                String referencedClass =
+                        constantPool.constantToString(constant);
+                classCalls.add(String.format(classReferenceFormat, referencedClass));
             }
         }
     }
@@ -95,5 +91,9 @@ public class ClassVisitor extends EmptyVisitor {
 
     public List<String> methodCalls() {
         return this.methodCalls;
+    }
+
+    public List<String> getClassCalls() {
+        return classCalls;
     }
 }

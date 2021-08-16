@@ -80,7 +80,11 @@ public class JCallGraph {
                 .filter(e -> !e.isDirectory() && e.getName().endsWith(".class"))
                 .flatMap(e -> {
                     ClassParser cp = new ClassParser(jarPath.toString(), e.getName());
-                    return makeClassVisitor(cp).start().methodCalls().stream();
+                    var started = makeClassVisitor(cp).start();
+                    return Stream.concat(
+                            started.methodCalls().stream(),
+                            started.getClassCalls().stream()
+                    );
                 })
                 .onClose(() -> {
                     try {
